@@ -1,0 +1,24 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.badge {
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--gradient-brand);
+  box-shadow: var(--shadow-sm);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.wordmarkOnDark {
+  color: var(--color-text-inverse);
+}

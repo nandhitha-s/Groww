@@ -1,0 +1,52 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.headerRow {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-10);
+}
+
+.glow {
+  position: absolute;
+  top: -60px;
+  left: -40px;
+  width: 360px;
+  height: 240px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.1) 0%, rgba(79, 70, 229, 0) 70%);
+  pointer-events: none;
+}
+
+.heading {
+  position: relative;
+  margin: 0 0 10px;
+}
+
+.subtitle {
+  position: relative;
+  margin: 0;
+}
+
+.newButton {
+  position: relative;
+  width: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 639px) {
+  .headerRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .newButton {
+    width: 100%;
+  }
+}

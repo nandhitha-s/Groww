@@ -1,0 +1,44 @@
+.wrapper {
+  min-height: 100vh;
+  display: flex;
+  background: var(--color-bg);
+}
+
+.panelColumn {
+  flex: 0 0 44%;
+  min-height: 100vh;
+}
+
+.formColumn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+}
+
+.formInner {
+  width: 100%;
+  max-width: 420px;
+}
+
+@media (max-width: 1023px) {
+  .panelColumn {
+    flex-basis: 36%;
+  }
+}
+
+@media (max-width: 639px) {
+  .wrapper {
+    flex-direction: column;
+  }
+
+  .panelColumn {
+    flex-basis: auto;
+    min-height: 0;
+  }
+
+  .formColumn {
+    padding: var(--space-6) var(--space-5) var(--space-10);
+  }
+}

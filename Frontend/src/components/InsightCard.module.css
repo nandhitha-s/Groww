@@ -1,0 +1,67 @@
+.card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    background var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-md);
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.title {
+  color: var(--color-text-inverse);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.caption {
+  color: var(--color-text-inverse-muted);
+  font-size: 0.8125rem;
+}
+
+.badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.badgePositive {
+  background: rgba(14, 171, 111, 0.22);
+  color: #7fe8bf;
+}
+
+.badgeNegative {
+  background: rgba(229, 72, 77, 0.22);
+  color: #ffb3b5;
+}
+
+.badgeNeutral {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--color-text-inverse);
+}

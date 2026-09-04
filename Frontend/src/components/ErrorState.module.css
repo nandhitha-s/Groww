@@ -1,0 +1,29 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-16) var(--space-6);
+}
+
+.iconCircle {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-5);
+  background: var(--color-danger-100);
+  color: var(--color-danger-600);
+}
+
+.heading {
+  margin: 0 0 var(--space-2);
+}
+
+.subtitle {
+  margin: 0 0 var(--space-6);
+  max-width: 34ch;
+}

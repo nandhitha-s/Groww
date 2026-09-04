@@ -1,0 +1,28 @@
+/* Shared styles for the Login and Register form panels. */
+
+.header {
+  margin-bottom: var(--space-8);
+}
+
+.subtitle {
+  margin-top: var(--space-2);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.formError {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-100);
+  color: var(--color-danger-600);
+  font-size: 0.9375rem;
+}
+
+.footerRow {
+  margin-top: var(--space-6);
+  text-align: center;
+}
