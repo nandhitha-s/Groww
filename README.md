@@ -135,9 +135,30 @@ Groww/
     └── package.json
 ```
 
-## Getting started locally
+## Instructions to Run
 
-### 1. Backend
+### Option A — just use the live demo (fastest)
+
+No setup needed: open **https://smartmarketapplication.vercel.app**, click
+**Register**, create any account (name/email/password — nothing is
+pre-seeded, so a fresh account starts with no watchlists), then add a few
+real NSE/BSE stocks (e.g. `RELIANCE`, `TATATECH`, `WIPRO`, `TCS`) to a
+watchlist from the Watchlists page. Everything after that — quotes, changes,
+signals — is real, live data.
+
+> Render's free tier cold-starts after inactivity, so the very first
+> request after a period of no traffic can take ~30-50s to respond — this is
+> a hosting-tier characteristic, not an app bug. A page refresh a moment
+> later will be fast.
+
+### Option B — run it locally
+
+**Prerequisites:** Python 3.12, Node.js 18+, and a PostgreSQL database (the
+project was built against a free [Supabase](https://supabase.com) Postgres
+instance — create one and grab its connection string, or point
+`DATABASE_URL` at any Postgres 14+ instance you already have).
+
+#### 1. Backend
 
 ```bash
 cd Backend
@@ -149,9 +170,10 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Runs at `http://127.0.0.1:8000`. Check `GET /health` and `GET /health/db`.
+Runs at `http://127.0.0.1:8000`. Verify it came up: `GET /health` and
+`GET /health/db` should both return `200`.
 
-### 2. Frontend
+#### 2. Frontend
 
 ```bash
 cd Frontend
@@ -163,6 +185,23 @@ Runs at `http://localhost:5173`. `vite.config.ts` proxies `/api/*` to the
 backend so the browser sees everything as same-origin — no CORS
 configuration needed for local dev, and the session cookie works exactly as
 in production.
+
+#### 3. Try it
+
+1. Open `http://localhost:5173`, click **Register**, create any account.
+2. Go to **Watchlists** → create one → add a few real symbols (e.g.
+   `RELIANCE`, `TATATECH`, `WIPRO`).
+3. Open **Dashboard** — this triggers a real quote fetch per stock and
+   records your first baseline (nothing to compare against yet, so
+   "Needs your attention" correctly shows "You're all caught up" on this
+   very first load).
+4. Reload the Dashboard later (after the market has moved, or after
+   adjusting a stock's stored baseline — see `Backend/tests/` for how the
+   change engine's thresholds work) to see real `PRICE_CHANGE`/
+   `VOLUME_SPIKE` entries appear under **Needs your attention**, and check
+   **Changes** to see the full persisted history.
+5. Try the **profile menu → Switch to dark mode** toggle in the header, and
+   the **Insights** tab on any stock's detail page (`/stocks/{SYMBOL}`).
 
 ## Environment variables (backend)
 
