@@ -1,3 +1,16 @@
+/**
+ * Concise "as of" time for a quote timestamp. `Date` parses the ISO
+ * timestamp's own offset (UTC "Z" or a "+05:30" offset alike) and
+ * `toLocaleTimeString` renders it in the browser's local timezone --
+ * never assume UTC/IST here, the timestamp already carries its offset.
+ */
+export function formatTimeOfDay(isoDate: string): string {
+  return new Date(isoDate).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function formatRelativeTime(isoDate: string): string {
   const then = new Date(isoDate).getTime();
   const diffMs = Date.now() - then;

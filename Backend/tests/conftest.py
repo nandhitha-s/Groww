@@ -44,7 +44,19 @@ def client(db_session: Session):
     leave permanent rows in the shared Supabase database."""
 
     def _override_get_db():
-        yield db_session
+        # Mirrors the real get_db()'s rollback-on-exception behavior (see
+        # app/database.py) -- without this, a genuinely unhandled exception
+        # during a request would leave whatever the session had autoflushed
+        # sitting uncommitted-but-unrolled-back in this shared test session,
+        # silently visible to later queries in the same test. It never
+        # closes db_session itself (unlike production's per-request
+        # session) -- that stays owned by the db_session fixture's own
+        # teardown, since it's reused across the whole test.
+        try:
+            yield db_session
+        except Exception:
+            db_session.rollback()
+            raise
 
     app.dependency_overrides[get_db] = _override_get_db
     try:
@@ -64,7 +76,19 @@ def client2(db_session: Session):
     for tests needing two independently authenticated users at once."""
 
     def _override_get_db():
-        yield db_session
+        # Mirrors the real get_db()'s rollback-on-exception behavior (see
+        # app/database.py) -- without this, a genuinely unhandled exception
+        # during a request would leave whatever the session had autoflushed
+        # sitting uncommitted-but-unrolled-back in this shared test session,
+        # silently visible to later queries in the same test. It never
+        # closes db_session itself (unlike production's per-request
+        # session) -- that stays owned by the db_session fixture's own
+        # teardown, since it's reused across the whole test.
+        try:
+            yield db_session
+        except Exception:
+            db_session.rollback()
+            raise
 
     app.dependency_overrides[get_db] = _override_get_db
     try:

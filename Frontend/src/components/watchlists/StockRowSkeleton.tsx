@@ -10,6 +10,10 @@ export function StockRowSkeleton() {
         <Skeleton width={150} height={11} />
       </div>
       <Skeleton width={56} height={18} radius={6} />
+      <div className={styles.quoteCell}>
+        <Skeleton width={76} height={16} />
+        <Skeleton width={92} height={12} style={{ marginTop: 4 }} />
+      </div>
     </div>
   );
 }

@@ -2,11 +2,13 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { HomePage } from './pages/HomePage';
+import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { WatchlistsPage } from './pages/WatchlistsPage';
 import { WatchlistDetailPage } from './pages/WatchlistDetailPage';
+import { StockDetailPage } from './pages/StockDetailPage';
+import { ChangesPage } from './pages/ChangesPage';
 
 function App() {
   return (
@@ -19,7 +21,7 @@ function App() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <HomePage />
+                <DashboardPage />
               </ProtectedRoute>
             }
           />
@@ -36,6 +38,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <WatchlistDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stocks/:symbol"
+            element={
+              <ProtectedRoute>
+                <StockDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/changes"
+            element={
+              <ProtectedRoute>
+                <ChangesPage />
               </ProtectedRoute>
             }
           />

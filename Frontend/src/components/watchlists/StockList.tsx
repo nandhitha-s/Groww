@@ -13,24 +13,32 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { StockRow } from './StockRow';
+import type { ChangeEventSummary } from '../../types/marketState';
+import type { QuoteState } from '../../types/marketData';
 import type { WatchlistStock } from '../../types/watchlist';
 
 interface StockListProps {
   stocks: WatchlistStock[];
+  quotes: Record<string, QuoteState>;
   onReorder: (newOrder: WatchlistStock[]) => void;
   onRemove: (symbol: string) => void;
   removingSymbol: string | null;
   reordering: boolean;
   newlyAddedId: string | null;
+  watchlistId?: string;
+  changes?: ChangeEventSummary[];
 }
 
 export function StockList({
   stocks,
+  quotes,
   onReorder,
   onRemove,
   removingSymbol,
   reordering,
   newlyAddedId,
+  watchlistId,
+  changes,
 }: StockListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -56,10 +64,13 @@ export function StockList({
             <StockRow
               key={stock.id}
               stock={stock}
+              quote={quotes[stock.symbol]}
               onRemove={() => onRemove(stock.symbol)}
               removing={removingSymbol === stock.symbol}
               disabled={reordering}
               isNew={stock.id === newlyAddedId}
+              watchlistId={watchlistId}
+              changes={changes}
             />
           ))}
         </div>

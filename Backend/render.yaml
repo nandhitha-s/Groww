@@ -1,0 +1,19 @@
+# Render.com Blueprint -- lets you deploy this backend with "New +" ->
+# "Blueprint" pointed at this repo, instead of filling in every field by
+# hand. DATABASE_URL is marked `sync: false` so Render prompts you to enter
+# it as a secret in the dashboard -- it is never stored in this file.
+services:
+  - type: web
+    name: smart-market-backend
+    runtime: python
+    plan: free
+    rootDir: Backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: "lax"

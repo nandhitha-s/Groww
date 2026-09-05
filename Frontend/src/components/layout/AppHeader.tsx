@@ -9,6 +9,7 @@ import styles from './AppHeader.module.css';
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Watchlists', path: '/watchlists' },
+  { label: 'Changes', path: '/changes' },
 ];
 
 export function AppHeader() {

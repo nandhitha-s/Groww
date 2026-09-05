@@ -52,6 +52,16 @@
   white-space: nowrap;
 }
 
+.spinningIcon {
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 639px) {
   .headerRow {
     flex-direction: column;

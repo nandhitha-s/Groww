@@ -24,6 +24,7 @@ vi.mock('./api/watchlists', () => ({
   addStock: vi.fn(),
   removeStock: vi.fn(),
   reorderStocks: vi.fn(),
+  recordWatchlistSeen: vi.fn(),
 }));
 
 import { meRequest } from './api/auth';

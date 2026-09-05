@@ -8,6 +8,9 @@ from app.database import get_db
 from app.models.stock import Stock
 from app.models.user import User
 from app.models.watchlist import Watchlist
+from app.schemas.change_events import ChangeEventSummary
+from app.schemas.market_signals import MarketSignalSummary
+from app.schemas.market_state import WatchlistMarketStateResult
 from app.schemas.watchlists import (
     AddStockRequest,
     ReorderStocksRequest,
@@ -17,7 +20,9 @@ from app.schemas.watchlists import (
     WatchlistSummary,
     WatchlistUpdate,
 )
+from app.services import market_snapshots as market_snapshot_service
 from app.services import watchlists as watchlist_service
+from app.services.market_data import MarketDataService, get_market_data_service
 
 router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 
@@ -233,3 +238,68 @@ def reorder_stocks(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     return _to_detail(watchlist)
+
+
+@router.post(
+    "/{watchlist_id}/market-state/seen",
+    response_model=WatchlistMarketStateResult,
+    responses={**_UNAUTHENTICATED, **_NOT_FOUND},
+)
+def record_watchlist_market_state_seen(
+    watchlist_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    market_data_service: MarketDataService = Depends(get_market_data_service),
+) -> WatchlistMarketStateResult:
+    """Record the watchlist's current market state (a MarketSnapshot per
+    successfully-observed stock), detect any meaningful changes against each
+    stock's previous baseline (Phase 6A -- app/services/change_engine.py),
+    detect any ephemeral current-quote Market Signals (Phase 6C --
+    app/services/market_signals.py), and explicitly mark it as seen by the
+    current user (their UserStockState). See app/services/market_snapshots.py
+    for the full semantics."""
+    try:
+        results, seen_at, changes, signals = market_snapshot_service.record_watchlist_market_state(
+            db, market_data_service, user=current_user, watchlist_id=watchlist_id
+        )
+    except market_snapshot_service.WatchlistNotFoundError:
+        raise _watchlist_not_found()
+
+    failed_symbols = [r.symbol for r in results if not r.success]
+    change_summaries = [
+        ChangeEventSummary(
+            stock_id=change.stock_id,
+            symbol=change.symbol,
+            type=change.type,
+            severity=change.severity,
+            title=change.title,
+            description=change.description,
+            old_value=change.old_value,
+            new_value=change.new_value,
+            detected_at=seen_at,
+        )
+        for change in changes
+    ]
+    signal_summaries = [
+        MarketSignalSummary(
+            stock_id=signal.stock_id,
+            symbol=signal.symbol,
+            type=signal.type,
+            severity=signal.severity,
+            title=signal.title,
+            description=signal.description,
+            detected_at=seen_at,
+        )
+        for signal in signals
+    ]
+    return WatchlistMarketStateResult(
+        watchlist_id=watchlist_id,
+        processed=len(results),
+        successful=len(results) - len(failed_symbols),
+        failed=len(failed_symbols),
+        failed_symbols=failed_symbols,
+        seen_at=seen_at,
+        detected=len(change_summaries),
+        changes=change_summaries,
+        market_signals=signal_summaries,
+    )

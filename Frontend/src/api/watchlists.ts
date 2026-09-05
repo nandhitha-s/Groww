@@ -1,4 +1,5 @@
 import { request } from './client';
+import type { WatchlistMarketStateResult } from '../types/marketState';
 import type { WatchlistDetail, WatchlistStock, WatchlistSummary } from '../types/watchlist';
 
 export function getWatchlists(): Promise<WatchlistSummary[]> {
@@ -44,5 +45,14 @@ export function reorderStocks(watchlistId: string, stockIds: string[]): Promise<
   return request<WatchlistDetail>(`/api/watchlists/${watchlistId}/stocks/reorder`, {
     method: 'PATCH',
     body: JSON.stringify({ stock_ids: stockIds }),
+  });
+}
+
+/** Records the watchlist's current market state as observed and explicitly
+ * seen by the current user (Phase 5A). Fire-and-forget from the caller's
+ * perspective -- never blocks or gates the watchlist UI itself. */
+export function recordWatchlistSeen(watchlistId: string): Promise<WatchlistMarketStateResult> {
+  return request<WatchlistMarketStateResult>(`/api/watchlists/${watchlistId}/market-state/seen`, {
+    method: 'POST',
   });
 }

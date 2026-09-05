@@ -1,25 +1,32 @@
 # Smart Market Watchlist — Backend
 
 Backend/database foundation (Phase 1), secure backend authentication
-(Phase 2), and watchlist management (Phase 3) for the Smart Market
-Watchlist application. This covers configuration, the database connection
-layer, SQLAlchemy models, Alembic migrations, a health-check API,
-cookie/session-based authentication, and a full watchlist CRUD API. It
-intentionally does not include market-data/news integration, change
-detection, or background jobs — those are later steps.
+(Phase 2), watchlist management (Phase 3), and a market-data provider
+layer backed by Yahoo Finance via `yfinance` (Phase 4A) for the Smart
+Market Watchlist application. This covers configuration, the database
+connection layer, SQLAlchemy models, Alembic migrations, a health-check
+API, cookie/session-based authentication, a full watchlist CRUD API, and
+read-only stock search/quote/history endpoints. It intentionally does not
+include change detection, news, background jobs, or trading/order APIs —
+those are later steps.
 
 ## Prerequisites
 
-- Python 3.12+
+- **Python 3.12** (not newer) — the optional, non-default `fyers-apiv3`
+  dependency's own dependency `aiohttp` has no prebuilt wheel yet for very
+  new Python versions (e.g. 3.14), and building it from source requires a
+  C++ toolchain. Use a 3.12 interpreter for the virtual environment below.
 - A PostgreSQL database hosted on Supabase (or any PostgreSQL 14+ instance)
 - The project's Supabase **connection pooler** string, not the direct
   connection string (see "Supabase connection notes" below)
+- Nothing else for market data — the active provider (Yahoo Finance via
+  `yfinance`) needs no account, API key, or credentials of any kind.
 
 ## Virtual environment setup
 
 ```bash
 cd Backend
-python -m venv .venv
+py -3.12 -m venv .venv   # use a Python 3.12 interpreter specifically
 # Windows
 .venv\Scripts\activate
 # macOS/Linux
@@ -237,6 +244,100 @@ stock, `400` a reorder payload that doesn't match the watchlist's current
 stocks exactly, `422` request validation (empty/too-long name, malformed
 symbol, duplicate IDs in a reorder payload).
 
+## Market data API (Yahoo Finance via `yfinance`)
+
+All routes require authentication. Route handlers never call a provider
+library directly:
+
+```
+Routes  ->  MarketDataService  ->  MarketDataProvider (interface)  ->  YFinanceProvider  ->  Yahoo Finance
+```
+
+`app/providers/market_data.py` defines the provider interface and the
+error vocabulary (`ProviderUnavailableError`, `InvalidSymbolError`,
+`InvalidQueryError`, `ProviderAuthenticationError`,
+`MalformedProviderResponseError`, `RateLimitedError`). `app/providers/yfinance_provider.py`
+is the only file that imports `yfinance`; everything above it only ever
+sees the provider-independent schemas in `app/schemas/market_data.py`.
+Swapping providers later means writing a new class implementing
+`MarketDataProvider` and changing one line in `app/services/market_data.py`.
+
+Why `yfinance` (see the Phase 4A provider comparison below for the full
+evaluation): it needs **no API key, no broker account, no OAuth login, and
+no daily token refresh** — the single biggest practical blocker with the
+previously-evaluated FYERS API v3 (see "FYERS (optional, dormant)" below).
+It has verified, current, correctly-timezoned NSE and BSE coverage.
+
+| Method | Path | Description |
+|--------|------|--------------|
+| GET | `/api/market-data/search?q=...` | Search real Yahoo Finance instruments by symbol or company name, filtered to NSE/BSE-listed results. Never creates a `Stock` row. |
+| GET | `/api/market-data/quote/{symbol}` | Current quote (price, previous close, day high/low, volume, 3-month average volume, change, change %). |
+| GET | `/api/market-data/history/{symbol}` | Historical candles for a fixed `period`: `1D`, `1W`, `1M` (default), `3M`, `1Y`. |
+
+`{symbol}` is our own short symbol (e.g. `RELIANCE`, matching `Stock.symbol`),
+never a Yahoo ticker — `YFinanceProvider` resolves it internally by trying
+the NSE suffix (`RELIANCE.NS`) first, then the BSE suffix (`RELIANCE.BO`).
+A stock found via search always resolves on the first try, since its
+`instrument_key` already carries the correct real suffix. An unknown symbol
+(neither suffix has data) returns `404`.
+
+**No fabricated data**: if Yahoo Finance doesn't provide a field (e.g.
+average volume), the response has `null` there rather than an invented
+value; if a response can't be parsed as expected, the API returns `502`
+rather than guessing.
+
+Status codes: `401` unauthenticated, `404` unknown symbol, `422` invalid
+query/period, `429` provider rate-limited us, `502` provider returned an
+unexpected shape, `503` provider unreachable.
+
+### Trade-off, stated plainly
+
+`yfinance` wraps Yahoo Finance's **unofficial, undocumented** endpoints —
+there is no formal SLA, no official support channel, and Yahoo could
+change or throttle them without notice. Quotes are also flagged
+`is_delayed: true` (Yahoo's free data is commonly ~15 minutes delayed for
+NSE/BSE, not real-time). This was accepted deliberately: for this project's
+stated priorities (free, no broker account, no interactive login, real
+NSE/BSE coverage), no alternative satisfied all of them at once, and this
+trade is far more practical than requiring every developer running this
+backend to hold a live FYERS brokerage account and re-authenticate
+interactively every trading day.
+
+### FYERS (optional, dormant)
+
+`app/providers/fyers.py` (a full `FYERSProvider` implementing the same
+`MarketDataProvider` interface, using FYERS' public symbol-master CSV for
+search and the authenticated `fyersModel` SDK for quotes/history) is kept
+in the codebase as a possible future alternative, but is **not** the active
+provider and is not wired into `get_market_data_service()`. It needs a
+FYERS broker account, an interactive browser login, and a manually
+regenerated access token roughly once a trading day — impractical as a
+default for this project. `fyers-apiv3` stays in `requirements.txt` and
+`FYERS_APP_ID`/`FYERS_ACCESS_TOKEN` stay as optional settings purely so
+this class keeps working if someone wants to switch back to it; there is
+no OAuth/token-generation plumbing wired into any route.
+
+### Phase 4A provider comparison
+
+Evaluated against this project's priority order (free > no broker account >
+no interactive OAuth > no manual token refresh > real NSE/BSE data > current
+quotes > historical OHLCV > rate limits > easy Python integration):
+
+| Provider | Free? | API key? | Broker account? | OAuth? | Manual token refresh? | NSE? | BSE? | Current quote? | Historical OHLCV? | Rate limits | Python support | Reliability concerns | Suitability |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **yfinance (selected)** | Yes | No | No | No | No | Yes (verified live) | Yes (verified live) | Yes | Yes | None published/enforced by the library itself; Yahoo may throttle | `yfinance` package, `YFRateLimitError` etc. for clean error mapping | Unofficial/reverse-engineered endpoint, no SLA | Best overall fit for this phase |
+| FYERS API v3 | Yes | Yes | **Yes** | **Yes** | **Yes (~daily)** | Yes | Yes | Yes | Yes | Reasonable once authenticated | Official `fyers-apiv3` SDK | Official, but unusable here without a broker account + daily login | Rejected: broker account + daily manual login |
+| Alpha Vantage | Yes (free tier) | Yes | No | No | No | Yes | Uncertain | Yes | Yes | 25 requests/**day** on the free tier | Simple REST | Free tier far too restrictive for interactive use | Rejected: rate limit |
+| Twelve Data | Yes (free tier) | Yes | No | No | No | Unconfirmed on free tier | Unconfirmed | Yes | Yes | 8 requests/minute, 800/day (free tier) | Simple REST | India/NSE coverage on the free plan could not be confirmed from official pricing docs | Rejected: unconfirmed India coverage |
+| Marketstack | Yes (free tier) | Yes | No | No | No | Uncertain | Uncertain | Limited | Yes | 100 requests/**month** free | Simple REST | Free tier far too restrictive | Rejected: rate limit |
+| Finnhub | Yes (free tier) | Yes | No | No | No | Uncertain (India often gated behind paid plans) | Uncertain | Yes (US-focused) | Yes (US-focused) | 60 requests/minute | Simple REST | India/NSE support unclear on free tier | Rejected: unconfirmed India coverage |
+| Financial Modeling Prep | Yes (free tier) | Yes | No | No | No | Uncertain (India often gated behind paid plans) | Uncertain | Yes (US-focused) | Yes (US-focused) | 250 requests/day (free tier) | Simple REST | India/NSE support unclear on free tier | Rejected: unconfirmed India coverage |
+
+`yfinance` is the only option that is simultaneously free, needs no
+account/key/OAuth, has verified real NSE and BSE coverage, and supports
+both current quotes and historical OHLCV — see "Trade-off, stated plainly"
+above for the one thing it gives up in exchange (no formal SLA).
+
 ## Running tests
 
 ```bash
@@ -293,12 +394,18 @@ Backend/
 │   │   └── deps.py        get_current_user dependency
 │   ├── core/
 │   │   └── security.py    Argon2 password hashing, session token gen/hash
+│   ├── providers/
+│   │   ├── market_data.py       MarketDataProvider interface + error hierarchy
+│   │   ├── yfinance_provider.py YFinanceProvider (active, default)
+│   │   └── fyers.py             FYERSProvider (optional, dormant -- not wired in)
 │   ├── schemas/
 │   │   ├── auth.py        RegisterRequest, LoginRequest, UserPublic
-│   │   └── watchlists.py  WatchlistCreate/Update/Summary/Detail/Stock, ...
+│   │   ├── watchlists.py  WatchlistCreate/Update/Summary/Detail/Stock, ...
+│   │   └── market_data.py StockSearchResult, QuoteResponse, HistoricalCandle, ...
 │   └── services/
-│       ├── auth.py        registration/login/session business logic
-│       └── watchlists.py  watchlist/stock CRUD, ownership, reordering
+│       ├── auth.py         registration/login/session business logic
+│       ├── watchlists.py   watchlist/stock CRUD, ownership, reordering
+│       └── market_data.py  MarketDataService (routes -> this -> a provider)
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
@@ -307,6 +414,7 @@ Backend/
 │   ├── conftest.py        rollback-only db_session/client(2) fixtures
 │   ├── test_auth.py
 │   ├── test_watchlists.py
+│   ├── test_market_data.py
 │   ├── test_health.py
 │   ├── test_config.py
 │   └── test_database.py

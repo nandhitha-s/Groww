@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
+    # FYERS API v3 -- an optional, non-default market-data provider kept
+    # for future use (requires a broker account + daily manual login, so
+    # it is not the active provider; see app/providers/fyers.py). All
+    # optional: the rest of the app must keep working without them.
+    fyers_app_id: str | None = None
+    fyers_access_token: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

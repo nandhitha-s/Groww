@@ -11,7 +11,10 @@ export const mockUser: UserPublic = {
   email: 'alice@example.com',
 };
 
-export function renderWithProviders(ui: ReactElement, { route = '/' }: { route?: string } = {}) {
+export function renderWithProviders(
+  ui: ReactElement,
+  { route = '/' }: { route?: string | { pathname: string; state?: unknown } } = {},
+) {
   return render(
     <MemoryRouter initialEntries={[route]}>
       <AuthProvider>
