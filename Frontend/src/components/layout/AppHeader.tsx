@@ -4,7 +4,35 @@ import { BrandMark } from '../BrandMark';
 import { DropdownMenu } from '../DropdownMenu';
 import { IconButton } from '../IconButton';
 import { useAuth } from '../../context/auth-context';
+import { useTheme } from '../../context/theme-context';
 import styles from './AppHeader.module.css';
+
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M12 2v2.5M12 19.5V22M4.22 4.22l1.77 1.77M18 18l1.78 1.78M2 12h2.5M19.5 12H22M4.22 19.78L6 18M18 6l1.78-1.78"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 14.5A8.5 8.5 0 119.5 4a6.5 6.5 0 0010.5 10.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard' },
@@ -16,6 +44,7 @@ export function AppHeader() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -36,6 +65,12 @@ export function AppHeader() {
   }
 
   const initial = user?.name?.trim().charAt(0).toUpperCase() || '?';
+
+  const themeMenuItem = {
+    label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+    onSelect: toggleTheme,
+    icon: theme === 'dark' ? <SunIcon /> : <MoonIcon />,
+  };
 
   return (
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ''}`}>
@@ -77,7 +112,7 @@ export function AppHeader() {
 
         <span className={styles.desktopOnly}>
           <DropdownMenu
-            items={[{ label: 'Log out', onSelect: handleLogout }]}
+            items={[themeMenuItem, { label: 'Log out', onSelect: handleLogout }]}
             renderTrigger={(triggerProps) => (
               <button
                 {...triggerProps}
@@ -94,6 +129,7 @@ export function AppHeader() {
           <DropdownMenu
             items={[
               ...NAV_ITEMS.map((item) => ({ label: item.label, onSelect: () => navigate(item.path) })),
+              themeMenuItem,
               { label: 'Log out', onSelect: handleLogout },
             ]}
             renderTrigger={(triggerProps) => (

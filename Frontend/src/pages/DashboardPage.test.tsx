@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPage } from './DashboardPage';
 import { mockUser, renderWithProviders } from '../test/testUtils';
 import type { ChangeEventSummary, MarketSignalSummary, WatchlistMarketStateResult } from '../types/marketState';
+import type { ChangeEventListItem } from '../types/changes';
 import type { QuoteResponse } from '../types/marketData';
 import type { WatchlistDetail, WatchlistStock, WatchlistSummary } from '../types/watchlist';
 
@@ -37,10 +38,16 @@ vi.mock('../api/marketData', () => ({
   getHistory: vi.fn(),
 }));
 
+vi.mock('../api/changes', () => ({
+  getChanges: vi.fn(),
+  acknowledgeChange: vi.fn(),
+}));
+
 import { meRequest } from '../api/auth';
 import { ApiError } from '../api/client';
 import { getQuote } from '../api/marketData';
 import { getWatchlist, getWatchlists, recordWatchlistSeen } from '../api/watchlists';
+import { getChanges } from '../api/changes';
 
 const watchlist = (overrides: Partial<WatchlistSummary> = {}): WatchlistSummary => ({
   id: 'w1',
@@ -102,6 +109,29 @@ const change = (overrides: Partial<ChangeEventSummary> = {}): ChangeEventSummary
   ...overrides,
 });
 
+let nextChangeId = 0;
+
+// The Dashboard's display (summary tiles, "Needs your attention", per-
+// watchlist counts) is sourced from GET /api/changes (persisted, un-
+// acknowledged), not from recordWatchlistSeen's own transient result --
+// see the "shared-row" comment in DashboardPage.tsx. This factory builds
+// that persisted shape.
+const changeListItem = (overrides: Partial<ChangeEventListItem> = {}): ChangeEventListItem => ({
+  id: `ce-${nextChangeId++}`,
+  stock_id: 's1',
+  symbol: 'NVDA',
+  watchlist_id: 'w1',
+  type: 'PRICE_CHANGE',
+  severity: 'MEDIUM',
+  title: 'NVDA moved 4.0% since you last checked',
+  description: 'NVDA increased from $1,270.00 to $1,322.00 since your last check.',
+  old_value: '1270.00',
+  new_value: '1322.00',
+  detected_at: '2026-01-05T10:00:00Z',
+  acknowledged_at: null,
+  ...overrides,
+});
+
 const marketSignal = (overrides: Partial<MarketSignalSummary> = {}): MarketSignalSummary => ({
   stock_id: 's1',
   symbol: 'TATATECH',
@@ -137,6 +167,8 @@ beforeEach(() => {
   vi.mocked(getWatchlist).mockResolvedValue(detail());
   vi.mocked(getQuote).mockReset();
   vi.mocked(getQuote).mockResolvedValue(quote());
+  vi.mocked(getChanges).mockReset();
+  vi.mocked(getChanges).mockResolvedValue({ items: [], limit: 100, count: 0 });
 });
 
 function renderDashboard() {
@@ -193,15 +225,14 @@ describe('DashboardPage', () => {
 
   it('shows the correct meaningful-change count and HIGH-impact count', async () => {
     vi.mocked(getWatchlists).mockResolvedValueOnce([watchlist({ id: 'w1', stock_count: 9 })]);
-    vi.mocked(recordWatchlistSeen).mockResolvedValueOnce(
-      seenResult({
-        detected: 2,
-        changes: [
-          change({ stock_id: 's1', symbol: 'NVDA', severity: 'HIGH' }),
-          change({ stock_id: 's2', symbol: 'AAPL', severity: 'MEDIUM' }),
-        ],
-      }),
-    );
+    vi.mocked(getChanges).mockResolvedValueOnce({
+      items: [
+        changeListItem({ stock_id: 's1', symbol: 'NVDA', severity: 'HIGH' }),
+        changeListItem({ stock_id: 's2', symbol: 'AAPL', severity: 'MEDIUM' }),
+      ],
+      limit: 100,
+      count: 2,
+    });
 
     renderDashboard();
 
@@ -213,9 +244,7 @@ describe('DashboardPage', () => {
 
   it('links "View all changes" to the Changes page when there are changes', async () => {
     vi.mocked(getWatchlists).mockResolvedValueOnce([watchlist({ id: 'w1', stock_count: 2 })]);
-    vi.mocked(recordWatchlistSeen).mockResolvedValueOnce(
-      seenResult({ detected: 1, changes: [change()] }),
-    );
+    vi.mocked(getChanges).mockResolvedValueOnce({ items: [changeListItem()], limit: 100, count: 1 });
 
     renderDashboard();
 
@@ -236,15 +265,24 @@ describe('DashboardPage', () => {
 
   it('orders HIGH severity changes before MEDIUM in the attention list', async () => {
     vi.mocked(getWatchlists).mockResolvedValueOnce([watchlist({ id: 'w1', stock_count: 2 })]);
-    vi.mocked(recordWatchlistSeen).mockResolvedValueOnce(
-      seenResult({
-        detected: 2,
-        changes: [
-          change({ stock_id: 's1', symbol: 'AAPL', severity: 'MEDIUM', title: 'AAPL moved 4.0% since you last checked' }),
-          change({ stock_id: 's2', symbol: 'NVDA', severity: 'HIGH', title: 'NVDA moved 12.0% since you last checked' }),
-        ],
-      }),
-    );
+    vi.mocked(getChanges).mockResolvedValueOnce({
+      items: [
+        changeListItem({
+          stock_id: 's1',
+          symbol: 'AAPL',
+          severity: 'MEDIUM',
+          title: 'AAPL moved 4.0% since you last checked',
+        }),
+        changeListItem({
+          stock_id: 's2',
+          symbol: 'NVDA',
+          severity: 'HIGH',
+          title: 'NVDA moved 12.0% since you last checked',
+        }),
+      ],
+      limit: 100,
+      count: 2,
+    });
 
     renderDashboard();
 
@@ -258,18 +296,17 @@ describe('DashboardPage', () => {
 
   it('uses the backend title and description verbatim, without recalculating', async () => {
     vi.mocked(getWatchlists).mockResolvedValueOnce([watchlist({ id: 'w1', stock_count: 1 })]);
-    vi.mocked(recordWatchlistSeen).mockResolvedValueOnce(
-      seenResult({
-        detected: 1,
-        changes: [
-          change({
-            title: 'NVDA volume is 70% above average',
-            description: 'Trading volume increased from an average of 10.0M shares to 17.0M shares.',
-            type: 'VOLUME_SPIKE',
-          }),
-        ],
-      }),
-    );
+    vi.mocked(getChanges).mockResolvedValueOnce({
+      items: [
+        changeListItem({
+          title: 'NVDA volume is 70% above average',
+          description: 'Trading volume increased from an average of 10.0M shares to 17.0M shares.',
+          type: 'VOLUME_SPIKE',
+        }),
+      ],
+      limit: 100,
+      count: 1,
+    });
 
     renderDashboard();
 
@@ -295,11 +332,14 @@ describe('DashboardPage', () => {
       watchlist({ id: 'w1', name: 'Tech', stock_count: 3 }),
       watchlist({ id: 'w2', name: 'Long Term', stock_count: 10 }),
     ]);
-    vi.mocked(recordWatchlistSeen).mockImplementation(async (id: string) =>
-      id === 'w1'
-        ? seenResult({ watchlist_id: 'w1', detected: 2, changes: [change(), change({ stock_id: 's2' })] })
-        : seenResult({ watchlist_id: 'w2', detected: 0, changes: [] }),
-    );
+    vi.mocked(getChanges).mockResolvedValueOnce({
+      items: [
+        changeListItem({ watchlist_id: 'w1' }),
+        changeListItem({ watchlist_id: 'w1', stock_id: 's2' }),
+      ],
+      limit: 100,
+      count: 2,
+    });
 
     renderDashboard();
 
@@ -352,6 +392,11 @@ describe('DashboardPage', () => {
     vi.mocked(recordWatchlistSeen).mockImplementation(async (id: string) => {
       if (id === 'w2') throw new ApiError(503, 'unavailable');
       return seenResult({ watchlist_id: 'w1', detected: 1, changes: [change()] });
+    });
+    vi.mocked(getChanges).mockResolvedValueOnce({
+      items: [changeListItem({ watchlist_id: 'w1' })],
+      limit: 100,
+      count: 1,
     });
 
     renderDashboard();
@@ -492,6 +537,11 @@ describe('DashboardPage', () => {
           market_signals: [marketSignal({ symbol: 'WIPRO', title: 'WIPRO is near today’s low' })],
         }),
       );
+      vi.mocked(getChanges).mockResolvedValueOnce({
+        items: [changeListItem({ symbol: 'NVDA' })],
+        limit: 100,
+        count: 1,
+      });
 
       renderDashboard();
 

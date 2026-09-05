@@ -13,8 +13,10 @@ import { MarketActivityList, type MarketActivityItem } from '../components/dashb
 import { useAuth } from '../context/auth-context';
 import { getQuote } from '../api/marketData';
 import { getWatchlist, getWatchlists, recordWatchlistSeen } from '../api/watchlists';
+import { getChanges } from '../api/changes';
 import { sortChangesByPriority } from '../utils/changePriority';
 import type { ChangeEventSummary, MarketSignalSummary } from '../types/marketState';
+import type { ChangeEventListItem } from '../types/changes';
 import type { WatchlistStock, WatchlistSummary } from '../types/watchlist';
 import styles from './DashboardPage.module.css';
 
@@ -33,6 +35,16 @@ function greeting(hour: number): string {
 
 interface DashboardData {
   watchlists: WatchlistSummary[];
+  // Persisted, unacknowledged changes (GET /api/changes) -- the source of
+  // truth for everything shown on this page (summary tiles, "Needs your
+  // attention", per-watchlist counts). Unlike the ephemeral per-call
+  // `changesByWatchlist` below, this survives a page reload: a change stays
+  // visible here until the user acknowledges it, not just until the next
+  // "seen" comparison finds nothing new.
+  unacknowledgedChanges: ChangeEventListItem[];
+  // The ephemeral result of this load's own "seen" comparison -- kept only
+  // as an optional preload for the stock detail page's nav state (Phase 8),
+  // never used for anything shown directly on this page.
   changesByWatchlist: Record<string, ChangeEventSummary[]>;
   signalsByWatchlist: Record<string, MarketSignalSummary[]>;
   unavailableCount: number;
@@ -127,7 +139,29 @@ export function DashboardPage() {
         // never blocks the rest of the dashboard.
       });
 
-      setData({ watchlists, changesByWatchlist, signalsByWatchlist, unavailableCount, marketActivity });
+      // Persisted history (Step: dashboard consistency with the Changes
+      // tab) -- fetched after the "seen" calls above so a change detected
+      // in this very load is already committed and included. A failure here
+      // is never allowed to block the rest of the dashboard -- it just means
+      // "Needs your attention" falls back to nothing from history.
+      let unacknowledgedChanges: ChangeEventListItem[] = [];
+      if (watchlists.length > 0) {
+        try {
+          const changesResult = await getChanges({ limit: 100 });
+          unacknowledgedChanges = changesResult.items.filter((item) => item.acknowledged_at === null);
+        } catch {
+          // Fall back to an empty list -- see comment above.
+        }
+      }
+
+      setData({
+        watchlists,
+        unacknowledgedChanges,
+        changesByWatchlist,
+        signalsByWatchlist,
+        unavailableCount,
+        marketActivity,
+      });
     } catch {
       setLoadError(true);
       loadInFlightOrDoneRef.current = false;
@@ -198,19 +232,23 @@ function DashboardContent({
   onOpenWatchlist: (id: string) => void;
 }) {
   const totalStocks = data.watchlists.reduce((sum, w) => sum + w.stock_count, 0);
-  const allChanges = Object.values(data.changesByWatchlist).flat();
+  const allChanges = data.unacknowledgedChanges;
   const highCount = allChanges.filter((c) => c.severity === 'HIGH').length;
 
-  // sortChangesByPriority is generic and only reorders by severity/
-  // detected_at, so it preserves each change's originating watchlist id
-  // (added above) -- needed to link a card through to /stocks/:symbol with
-  // the right watchlist context (Phase 8), without a second "meaningful"
-  // definition or a second backend call.
-  const changesWithWatchlist: (ChangeEventSummary & { watchlistId: string })[] = Object.entries(
-    data.changesByWatchlist,
-  ).flatMap(([watchlistId, changes]) => changes.map((change) => ({ ...change, watchlistId })));
-  const sortedChanges = sortChangesByPriority(changesWithWatchlist);
+  const sortedChanges = sortChangesByPriority(allChanges);
   const topChanges = sortedChanges.slice(0, MAX_ATTENTION_ITEMS);
+
+  // Per-watchlist counts for "Your watchlists" below -- same persisted,
+  // unacknowledged source as the summary tiles above, so a card's count
+  // never disappears just because this load's own "seen" comparison found
+  // nothing new for that watchlist.
+  const unacknowledgedCountByWatchlist = data.unacknowledgedChanges.reduce<Record<string, number>>(
+    (acc, c) => {
+      if (c.watchlist_id) acc[c.watchlist_id] = (acc[c.watchlist_id] ?? 0) + 1;
+      return acc;
+    },
+    {},
+  );
 
   // Market Signals (Phase 6C): ephemeral, current-quote-only conditions --
   // reuses the same priority sort as changes (both have severity/
@@ -278,14 +316,14 @@ function DashboardContent({
           </div>
         ) : (
           <ul className={styles.attentionList}>
-            {topChanges.map((change, index) => (
+            {topChanges.map((change) => (
               <ChangeCard
-                key={`${change.stock_id}-${change.type}-${index}`}
+                key={change.id}
                 change={change}
                 linkTo={`/stocks/${change.symbol}`}
                 linkState={{
-                  watchlistId: change.watchlistId,
-                  changes: data.changesByWatchlist[change.watchlistId] ?? [],
+                  watchlistId: change.watchlist_id ?? undefined,
+                  changes: (change.watchlist_id && data.changesByWatchlist[change.watchlist_id]) || [],
                 }}
               />
             ))}
@@ -324,7 +362,7 @@ function DashboardContent({
               key={watchlist.id}
               name={watchlist.name}
               stockCount={watchlist.stock_count}
-              changeCount={(data.changesByWatchlist[watchlist.id] ?? []).length}
+              changeCount={unacknowledgedCountByWatchlist[watchlist.id] ?? 0}
               onOpen={() => onOpenWatchlist(watchlist.id)}
               staggerIndex={index}
             />

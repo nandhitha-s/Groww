@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
+import { ThemeProvider } from '../context/ThemeContext';
 import { ToastProvider } from '../context/ToastContext';
 import type { UserPublic } from '../api/auth';
 
@@ -17,9 +18,11 @@ export function renderWithProviders(
 ) {
   return render(
     <MemoryRouter initialEntries={[route]}>
-      <AuthProvider>
-        <ToastProvider>{ui}</ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>{ui}</ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </MemoryRouter>,
   );
 }
