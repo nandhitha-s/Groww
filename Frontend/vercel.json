@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://REPLACE_WITH_YOUR_BACKEND_URL/api/$1"
+      "destination": "https://groww-zmgw.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",

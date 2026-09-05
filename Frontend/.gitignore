@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
 
 # Vercel CLI project link (contains project/org IDs, not for source control)
 .vercel
