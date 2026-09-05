@@ -17,7 +17,7 @@ export default defineConfig({
       // backend, and the HttpOnly session cookie works exactly as it does
       // when the API is called directly.
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://groww-zmgw.onrender.com',
         changeOrigin: true,
       },
     },
